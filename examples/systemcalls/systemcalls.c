@@ -9,14 +9,18 @@
 */
 bool do_system(const char *cmd)
 {
-
+  int rtn;
 /*
  * TODO  add your code here
  *  Call the system() function with the command set in the cmd
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
-*/
-
+ */
+  rtn=system(cmd);
+  
+  if(rtn < 0)
+    return false;
+  else
     return true;
 }
 
@@ -40,6 +44,7 @@ bool do_exec(int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+    
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
@@ -47,7 +52,7 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    //command[count] = command[count];
 
 /*
  * TODO:
@@ -58,10 +63,28 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    int kidpid;
+    int err=0;
+    int status=0;
+    
+    fflush(stdout);
 
+    kidpid=fork();
+    
+    if (kidpid==0)
+      {
+	execv(command[0],command);
+	perror("Error on execv");
+	exit(EXIT_FAILURE);
+      }
+    
+    err=waitpid(kidpid,&status,0);
     va_end(args);
-
-    return true;
+    
+    if (WIFEXITED(status) == false || err == -1 || WEXITSTATUS(status) != 0)
+      return false;
+    else      
+      return true;
 }
 
 /**
@@ -92,8 +115,46 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    int kidpid;
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    int status=0;
+    int err=0;
+    
+    if (fd < 0)
+      {
+      perror("open");
+      abort();
+      }
+    
+    fflush(stdout);
+    kidpid = fork();
 
+    switch (kidpid)
+      {
+      case -1:
+	perror("fork");
+	break;
+	
+      case 0:
+	if (dup2(fd, 1) < 0)
+	  {
+	  perror("dup2");
+	  abort();
+	  }
+	execv(command[0], command);
+	perror("execv");
+	break;
+	
+      default:
+	break;
+      }
+    close(fd);
     va_end(args);
 
-    return true;
+    err=waitpid(kidpid,&status,0);
+         
+   if (WIFEXITED(status) == false || err == -1 || WEXITSTATUS(status) != 0)
+      return false;
+    else      
+      return true;
 }
